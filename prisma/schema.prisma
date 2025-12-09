@@ -7,3 +7,202 @@ datasource db {
   // URL is now configured elsewhere
 }
 
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  SEATED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum TableStatus {
+  AVAILABLE
+  RESERVED
+  OCCUPIED
+  UNAVAILABLE
+}
+
+enum OrderItemStatus {
+  PENDING
+  PREPARING
+  READY
+  SERVED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+model Restaurant {
+  id              Int       @id @default(autoincrement())
+  name            String
+  description     String?
+  email           String
+  phone           String
+  logoUrl         String?
+  coverImageUrl   String?
+  openTime        String
+  closeTime       String
+  timezone        String    @default("UTC")
+  bookingDuration Int       @default(120)
+  createdAt       DateTime  @default(now())
+
+  menus           Menu[]
+  tables          RestaurantTable[]
+  Waitlist        WaitlistEntry[]
+}
+
+model User {
+  id              Int       @id @default(autoincrement())
+  username        String
+  email           String    @unique
+  phone           String?   @unique
+  password        String
+  isEmailVerified Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+
+  otps            OTP[]
+  bookings        Booking[]
+}
+
+model OTP {
+  id        Int     @id @default(autoincrement())
+  otp       String
+  userId    Int
+  expiresAt DateTime
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Menu {
+  id            Int        @id @default(autoincrement())
+  name          String
+  description   String?
+  isActive      Boolean    @default(true)
+  availableFrom String?
+  availableTo   String?
+  restaurantId  Int
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  items         MenuItem[]
+}
+
+model Category {
+  id    Int      @id @default(autoincrement())
+  name  String
+  items MenuItem[]
+}
+
+model FoodType {
+  id    Int      @id @default(autoincrement())
+  name  String
+  items MenuItem[]
+}
+
+model MenuItem {
+  id            Int        @id @default(autoincrement())
+  name          String
+  description   String?
+  imageUrl      String?
+  price         Decimal
+  isAvailable   Boolean    @default(true)
+  
+  menuId        Int
+  categoryId    Int?
+  foodTypeId    Int?
+  
+  menu          Menu       @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  category      Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  foodType      FoodType?  @relation(fields: [foodTypeId], references: [id], onDelete: SetNull)
+  
+  preorderItems BookingPreorderItem[]
+}
+
+model RestaurantTable {
+  id            Int           @id @default(autoincrement())
+  tableNumber   String
+  name          String?
+  capacity      Int
+  minCapacity   Int?
+  status        TableStatus @default(AVAILABLE)
+  location      String?
+  restaurantId  Int
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  bookings      Booking[]
+}
+
+model Booking {
+  id              Int           @id @default(autoincrement())
+  bookingCode     String        @unique @default(uuid())
+  
+  tableId         Int
+  userId          Int
+  guestCount      Int
+  startTime       DateTime
+  endTime         DateTime
+  
+  status          BookingStatus @default(PENDING)
+  specialRequests String?
+  
+  contactName     String?
+  contactPhone    String?
+  contactEmail    String?
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  table           RestaurantTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  preorderItems   BookingPreorderItem[]
+  payment         Payment?
+}
+
+model BookingPreorderItem {
+  id                  Int               @id @default(autoincrement())
+  bookingId           Int
+  menuItemId          Int
+  quantity            Int               @default(1)
+  specialInstructions String?
+  status              OrderItemStatus @default(PENDING)
+  
+  booking             Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  menuItem            MenuItem          @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  
+  priceAtOrder        Decimal
+  
+  @@unique([bookingId, menuItemId, specialInstructions])
+}
+
+model Payment {
+  id                Int           @id @default(autoincrement())
+  bookingId         Int           @unique
+  amount            Decimal
+  currency          String        @default("INR")
+  
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  razorpaySignature String?
+  
+  status            PaymentStatus @default(PENDING)
+  paidAt            DateTime?
+  
+  booking           Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model WaitlistEntry {
+  id            Int      @id @default(autoincrement())
+  name          String
+  phone         String
+  guestCount    Int
+  requestedTime DateTime
+  status        String   @default("WAITING")
+  restaurantId  Int
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+}
